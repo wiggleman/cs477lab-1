@@ -1,0 +1,14 @@
+compile_commands.json
+.cache/
+.build/
+bpfnic
+bpfnic-test
+bpfnic-bench
+bpf/*.o
+bpf/*.skel.h
+cmake_install.cmake
+src/CMakeFiles/*
+CMakeFiles/*
+*.csv
+
+bpfnic/synthetic-traffic-gen/build/CMakeFiles
