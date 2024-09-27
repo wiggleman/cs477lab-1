@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(BUILD_SHARED_LIBS ON)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra -Wpedantic	\
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror -Wextra	\
 	-Wno-gnu-zero-variadic-macro-arguments -Wno-nested-anon-types		\
 	-Wno-gnu-anonymous-struct -Wno-variadic-macros				\
 	-Wno-zero-length-array -Wno-c99-designator				\
