@@ -358,7 +358,8 @@ int redirectProgRoundRobinCoreSeparated(std::vector<int>& cpusShort, std::vector
 }
 
 #define MAX_CPUS 8
-#define MIN_CPUS 1
+#define MIN_CPUS 2
+#define QD_THRESHOLD 200.0
 
 /// adds one CPU to the core group
 void addOneCPU(int countFd) {
@@ -368,6 +369,11 @@ void addOneCPU(int countFd) {
 
   // TODO: Code to add a CPU
   // cpuCount after lookup will contain the current value
+  
+  if (cpuCount < MAX_CPUS){    
+    cpuCount += 1;
+    bpf_map_update_elem(countFd, &key0, &cpuCount, 0);
+  }
 }
 
 /// removes one CPU from the core group
@@ -378,6 +384,10 @@ void removeOneCPU(int countFd) {
 
   // TODO: Code to remove a CPU
   // cpuCount after lookup will contain the current value
+  if (cpuCount > MIN_CPUS){    
+    cpuCount -= 1;
+    bpf_map_update_elem(countFd, &key0, &cpuCount, 0);
+  }
 }
 
 /// @return the average queuing delay across all cores that have sent packets
@@ -507,6 +517,10 @@ int redirectProgDynamicCoreAllocation(std::vector<int>& availCpus, std::string& 
 
     // BEGIN: CORE ADDITION LOGIC
     // TODO: Add logic to observe queueing delay and add cores
+    double average_qd = ((double)computeAverageQueuingDelay(totalSrvTimeFd, txCtrFd) )/ 1000.0; // in microsecond
+    if (average_qd > QD_THRESHOLD)
+      addOneCPU(countFd);
+
     // END: CORE ADDITION LOGIC
 
     // clear arrays - state is kept per-window

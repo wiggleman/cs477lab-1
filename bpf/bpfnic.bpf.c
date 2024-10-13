@@ -317,7 +317,38 @@ int bpf_redirect_roundrobin(struct xdp_md *ctx)
 	}
 
 	// TODO: make redirection decision
-	return XDP_DROP;
+	cpu_iterator = bpf_map_lookup_elem(&cpu_iter, &key0);
+	if (!cpu_iterator)
+		return XDP_DROP;
+	cpu_count = bpf_map_lookup_elem(&cpus_count, &key0);
+	if (!cpu_count)
+		return XDP_DROP;
+
+	cpu_idx = *cpu_iterator;
+	if (cpu_idx + 1 >= *cpu_count){
+		*cpu_iterator = 0;
+	} else {
+		*cpu_iterator = cpu_idx + 1;
+	}
+	//*cpu_id = (cpu_idx + 1) % *max_cpu ;
+		
+
+	__u32 *cpu_avail = bpf_map_lookup_elem(&cpus_available, &cpu_idx);
+	if (!cpu_avail)
+		return XDP_DROP;
+	if (*cpu_avail == 0){
+		bpf_printk("cpu%d not available", cpu_idx);
+		return XDP_ABORTED;
+	}
+
+
+	long ret = bpf_redirect_map(&cpu_map, cpu_idx, 0);
+	if (ret != XDP_REDIRECT){
+		bpf_printk("bpf_redirect_map (devmap) failure: ret code = %d", ret);
+		return XDP_DROP;
+	}
+	return ret;
+
 }
 
 /* array of cpus available for processing long requests */
@@ -377,7 +408,65 @@ int bpf_redirect_roundrobin_core_separated(struct xdp_md *ctx)
 		return XDP_PASS;
 
 	// TODO: make redirection decision
-	return XDP_DROP;
+	int is_short = 1;
+	packet  = nh.pos;
+	if (packet +1 > data_end ){
+		return XDP_DROP;
+	}
+	cpu_count_short = bpf_map_lookup_elem(&cpu_count_core_separated, &key0);
+	if (!cpu_count_short)
+		return XDP_DROP;
+	cpu_count_long = bpf_map_lookup_elem(&cpu_count_core_separated, &key1);
+	if (!cpu_count_long)
+		return XDP_DROP;
+	if(packet->data < 10){
+		selected_map = &cpus_available_short_reqs;
+		cpu_iterator_short = bpf_map_lookup_elem(&cpu_iter_core_separated, &key0);
+		if (!cpu_iterator_short)
+			return XDP_DROP;
+
+		cpu_idx = *cpu_iterator_short;
+		if (cpu_idx + 1 >= *cpu_count_short){
+			*cpu_iterator_short = 0;
+		} else {
+			*cpu_iterator_short = cpu_idx + 1;
+		}
+		bpf_printk("received short packet (data=%d), scheduled to run at cpu: %d", packet->data, cpu_idx);
+	} else {
+		is_short = 0;
+		selected_map = &cpus_available_long_reqs;
+		cpu_iterator_long = bpf_map_lookup_elem(&cpu_iter_core_separated, &key1);
+		if (!cpu_iterator_long)
+			return XDP_DROP;
+
+		cpu_idx = *cpu_iterator_long;
+		if (cpu_idx + 1 >= *cpu_count_long){
+			*cpu_iterator_long = 0;
+		} else {
+			*cpu_iterator_long = cpu_idx + 1;
+		}
+		//cpu_idx += *cpu_count_short; //offset 
+		bpf_printk("received long packet (data=%d), scheduled to run at cpu: %d", packet->data, cpu_idx);
+	}
+
+	__u32 *cpu_avail = bpf_map_lookup_elem(selected_map, &cpu_idx);
+	if (!cpu_avail)
+		return XDP_DROP;
+	if (*cpu_avail == 0){
+		bpf_printk("cpu%d not available, intended task is short?: %d", cpu_idx, is_short);
+		return XDP_ABORTED;
+	}
+
+	if(is_short == 0){
+		cpu_idx += *cpu_count_short;
+	}
+	long ret = bpf_redirect_map(&cpu_map, cpu_idx, 0);
+	if (ret != XDP_REDIRECT){
+		bpf_printk("bpf_redirect_map (devmap) failure: ret code = %d", ret);
+		return XDP_DROP;
+	}
+	return ret;
+	
 }
 
 SEC("tc")
